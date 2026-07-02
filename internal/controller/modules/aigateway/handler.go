@@ -6,31 +6,20 @@ import (
 	"fmt"
 
 	operatorv1 "github.com/openshift/api/operator/v1"
-	k8serr "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/opendatahub-io/opendatahub-operator/v2/api/common"
 	componentApi "github.com/opendatahub-io/opendatahub-operator/v2/api/components/v1alpha1"
-	dscv2 "github.com/opendatahub-io/opendatahub-operator/v2/api/datasciencecluster/v2"
+	"github.com/opendatahub-io/opendatahub-operator/v2/api/common"
 	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/modules"
-	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/status"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/cluster"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/cluster/gvk"
-	odhtypes "github.com/opendatahub-io/opendatahub-operator/v2/pkg/controller/types"
-	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/operatorconfig"
 )
 
 const (
 	moduleName = componentApi.AIGatewayComponentName
 	crName     = componentApi.AIGatewayInstanceName
-
-	// ReadyConditionType is the DSC condition type set by the component handler.
-	// Follows the <Kind>Ready pattern used by all other ODH components.
-	ReadyConditionType = componentApi.AIGatewayKind + status.ReadySuffix // "AIGatewayReady"
 
 	// manifestDir is the directory (relative to ManifestsBasePath, e.g.
 	// /opt/manifests/aigateway) where get_all_manifests.sh places the
@@ -68,7 +57,10 @@ var (
 		"RELATED_IMAGE_ODH_LLM_D_BATCH_GATEWAY_APISERVER_IMAGE",
 		"RELATED_IMAGE_ODH_LLM_D_BATCH_GATEWAY_PROCESSOR_IMAGE",
 		"RELATED_IMAGE_ODH_LLM_D_BATCH_GATEWAY_GC_IMAGE",
-		// MaaS images (commented out until onboarded to build configs - RHOAIENG-66857)
+		// MaaS images are not yet in the build configs (RHOAIENG-66857).
+		// Until that ticket lands, the maas-controller image is hardcoded in
+		// config/manifests/maascontroller/manager/kustomization.yaml.
+		// Uncomment these once the images are registered in the ODH build pipeline:
 		// "RELATED_IMAGE_ODH_MAAS_CONTROLLER_IMAGE",
 		// "RELATED_IMAGE_ODH_MAAS_API_IMAGE",
 		// "RELATED_IMAGE_ODH_AI_GATEWAY_PAYLOAD_PROCESSING_IMAGE",
@@ -83,10 +75,6 @@ type handler struct {
 
 // componentHandler implements ComponentHandler for AIGateway status reporting.
 // It wraps the module handler to provide component registry methods.
-type componentHandler struct {
-	*handler
-}
-
 func NewHandler() *handler {
 	return &handler{
 		BaseHandler: modules.BaseHandler{
@@ -99,35 +87,21 @@ func NewHandler() *handler {
 				ControllerImage:      controllerImage,
 				InitContainerName:    initContainerName, // use same controller image for initContainer
 				RelatedImages:        relatedImages,
-				DeploymentName:       deploymentName, // different name need to set explicltiy
+				DeploymentName:       deploymentName, // different name need to set explicitly
 				GVK:                  gvk.AIGateway,
 			},
 		},
 	}
 }
 
-// NewComponentHandler creates a component handler wrapper for status reporting.
-func NewComponentHandler() *componentHandler {
-	return &componentHandler{handler: NewHandler()}
-}
-
 func (h *handler) IsEnabled(platform *modules.PlatformContext) bool {
-	if platform == nil {
+	if platform == nil || platform.DSC == nil {
 		return false
 	}
-	if platform.DSC != nil {
-		aigateway := platform.DSC.Spec.Components.AIGateway
-
-		// Top-level AIGateway ManagementState acts as master switch
-		if aigateway.ManagementState == operatorv1.Removed {
-			return false
-		}
-
-		// AIGateway is enabled if either sub-component is Managed
-		return aigateway.ModelsAsService.ManagementState == operatorv1.Managed ||
-			aigateway.BatchGateway.ManagementState == operatorv1.Managed
-	}
-	return false
+	// Top-level managementState is the single enable/disable switch for the module.
+	// Sub-component states (modelsAsService, batchGateway) control what the
+	// ai-gateway-operator deploys, not whether AIGateway itself is enabled.
+	return platform.DSC.Spec.Components.AIGateway.ManagementState == operatorv1.Managed
 }
 
 // BuildModuleCR projects the DSC AIGateway configuration onto the
@@ -164,104 +138,3 @@ func (h *handler) BuildModuleCR(
 	return u, nil
 }
 
-// ComponentHandler interface implementation for componentHandler
-// These methods allow AIGateway to be registered as a Component for status reporting
-
-func (c *componentHandler) Init(platform common.Platform, cfg operatorconfig.OperatorSettings) error {
-	// No additional initialization needed - module handler already initialized
-	return nil
-}
-
-func (c *componentHandler) GetName() string {
-	return moduleName
-}
-
-func (c *componentHandler) IsEnabled(dsc *dscv2.DataScienceCluster) bool {
-	if dsc == nil {
-		return false
-	}
-
-	aigateway := dsc.Spec.Components.AIGateway
-
-	// Top-level AIGateway ManagementState acts as master switch
-	if aigateway.ManagementState == operatorv1.Removed {
-		return false
-	}
-
-	// AIGateway is enabled if either sub-component is Managed
-	return aigateway.ModelsAsService.ManagementState == operatorv1.Managed ||
-		aigateway.BatchGateway.ManagementState == operatorv1.Managed
-}
-
-func (c *componentHandler) NewCRObject(ctx context.Context, cli client.Client, dsc *dscv2.DataScienceCluster) (common.PlatformObject, error) {
-	// AIGateway CR is managed externally by the module reconciler, not by the component reconciler
-	// Return nil to indicate no component-owned CR (similar to how some components work)
-	return nil, nil
-}
-
-func (c *componentHandler) NewComponentReconciler(ctx context.Context, mgr ctrl.Manager) error {
-	// Module reconciler is already set up separately via NewModuleReconciler
-	// No additional component reconciler needed
-	return nil
-}
-
-func (c *componentHandler) UpdateDSCStatus(ctx context.Context, rr *odhtypes.ReconciliationRequest) (metav1.ConditionStatus, error) {
-	// Set AIGatewayReady=False as the safe default until we confirm the CR is ready.
-	// This mirrors the pattern used by all other ODH components (e.g. KServe, Dashboard).
-	rr.Conditions.MarkFalse(ReadyConditionType)
-
-	// Get the AIGateway CR managed by the ai-gateway-operator.
-	cr := &unstructured.Unstructured{}
-	cr.SetGroupVersionKind(c.Config.GVK)
-	cr.SetName(componentApi.AIGatewayInstanceName)
-
-	if err := rr.Client.Get(ctx, client.ObjectKeyFromObject(cr), cr); err != nil {
-		if k8serr.IsNotFound(err) {
-			return metav1.ConditionFalse, nil
-		}
-		return metav1.ConditionUnknown, err
-	}
-
-	// Mirror managementState into DSC status.components.aigateway.
-	dsc, ok := rr.Instance.(*dscv2.DataScienceCluster)
-	if !ok {
-		return metav1.ConditionUnknown, errors.New("instance is not a DataScienceCluster")
-	}
-	dsc.Status.Components.AIGateway.ManagementState = dsc.Spec.Components.AIGateway.ManagementState
-
-	// Mirror the AIGateway CR's Ready condition onto the DSC as AIGatewayReady.
-	conditions, found, err := unstructured.NestedSlice(cr.Object, "status", "conditions")
-	if err != nil {
-		return metav1.ConditionFalse, err
-	}
-	if !found {
-		return metav1.ConditionFalse, nil
-	}
-
-	for _, cond := range conditions {
-		condMap, ok := cond.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		condType, _, _ := unstructured.NestedString(condMap, "type")
-		condStatus, _, _ := unstructured.NestedString(condMap, "status")
-		condReason, _, _ := unstructured.NestedString(condMap, "reason")
-		condMsg, _, _ := unstructured.NestedString(condMap, "message")
-
-		if condType == status.ConditionTypeReady {
-			rc := common.Condition{
-				Type:    condType,
-				Status:  metav1.ConditionStatus(condStatus),
-				Reason:  condReason,
-				Message: condMsg,
-			}
-			rr.Conditions.MarkFrom(ReadyConditionType, rc)
-			if condStatus == string(metav1.ConditionTrue) {
-				return metav1.ConditionTrue, nil
-			}
-			return metav1.ConditionFalse, nil
-		}
-	}
-
-	return metav1.ConditionFalse, nil
-}
