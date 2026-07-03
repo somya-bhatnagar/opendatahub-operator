@@ -49,21 +49,32 @@ var (
 	}
 
 	// relatedImages are the operand images the ai-gateway-operator passes to
-	// the sub-module (batch-gateway-operator) deployments it creates; injected as
-	// RELATED_IMAGE_* env vars on the ai-g ateway-operator container.
-	// TODO: append more for maas images.
+	// the sub-module (batch-gateway-operator, maas-controller) deployments it creates;
+	// injected as RELATED_IMAGE_* env vars on the ai-gateway-operator container.
 	relatedImages = []string{
+		// Batch Gateway images
 		"RELATED_IMAGE_ODH_LLM_D_BATCH_GATEWAY_OPERATOR_IMAGE",
 		"RELATED_IMAGE_ODH_LLM_D_BATCH_GATEWAY_APISERVER_IMAGE",
 		"RELATED_IMAGE_ODH_LLM_D_BATCH_GATEWAY_PROCESSOR_IMAGE",
 		"RELATED_IMAGE_ODH_LLM_D_BATCH_GATEWAY_GC_IMAGE",
+		// MaaS images are not yet in the build configs (RHOAIENG-66857).
+		// Until that ticket lands, the maas-controller image is hardcoded in
+		// config/manifests/maascontroller/manager/kustomization.yaml.
+		// Uncomment these once the images are registered in the ODH build pipeline:
+		// "RELATED_IMAGE_ODH_MAAS_CONTROLLER_IMAGE",
+		// "RELATED_IMAGE_ODH_MAAS_API_IMAGE",
+		// "RELATED_IMAGE_ODH_AI_GATEWAY_PAYLOAD_PROCESSING_IMAGE",
+		// "RELATED_IMAGE_UBI_MINIMAL_IMAGE",
 	}
 )
 
+// handler implements ModuleHandler for AIGateway.
 type handler struct {
 	modules.BaseHandler
 }
 
+// componentHandler implements ComponentHandler for AIGateway status reporting.
+// It wraps the module handler to provide component registry methods.
 func NewHandler() *handler {
 	return &handler{
 		BaseHandler: modules.BaseHandler{
@@ -76,7 +87,7 @@ func NewHandler() *handler {
 				ControllerImage:      controllerImage,
 				InitContainerName:    initContainerName, // use same controller image for initContainer
 				RelatedImages:        relatedImages,
-				DeploymentName:       deploymentName, // different name need to set explicltiy
+				DeploymentName:       deploymentName, // different name need to set explicitly
 				GVK:                  gvk.AIGateway,
 			},
 		},
@@ -87,8 +98,13 @@ func (h *handler) IsEnabled(platform *modules.PlatformContext) bool {
 	if platform == nil {
 		return false
 	}
+	// OpenShift
 	if platform.DSC != nil {
 		return platform.DSC.Spec.Components.AIGateway.ManagementState == operatorv1.Managed
+	}
+	// xkS
+	if platform.Platform != nil {
+		return platform.Platform.Spec.Modules.AIGateway.ManagementState == operatorv1.Managed
 	}
 	return false
 }
@@ -105,15 +121,24 @@ func (h *handler) BuildModuleCR(
 	if platform == nil {
 		return nil, errors.New("platform context is nil, cannot build AIGateway CR")
 	}
-	if platform.DSC == nil {
-		return nil, errors.New("DSC is not available, cannot build AIGateway CR")
-	}
 
-	spec, err := runtime.DefaultUnstructuredConverter.ToUnstructured(
-		&platform.DSC.Spec.Components.AIGateway.AIGatewayCommonSpec,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert AIGatewayCommonSpec to unstructured: %w", err)
+	var spec map[string]any
+
+	switch {
+	case platform.DSC != nil:
+		var err error
+		spec, err = runtime.DefaultUnstructuredConverter.ToUnstructured(
+			&platform.DSC.Spec.Components.AIGateway.AIGatewayCommonSpec,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert AIGatewayCommonSpec to unstructured: %w", err)
+		}
+	case platform.Platform != nil:
+		spec = map[string]any{
+			"managementState": string(platform.Platform.Spec.Modules.AIGateway.ManagementState),
+		}
+	default:
+		return nil, errors.New("neither DSC CR nor Platform CR exists, cannot build AIGateway CR")
 	}
 
 	u := &unstructured.Unstructured{

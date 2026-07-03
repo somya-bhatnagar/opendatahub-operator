@@ -8,6 +8,7 @@ import (
 
 	"github.com/opendatahub-io/opendatahub-operator/v2/api/common"
 	componentApi "github.com/opendatahub-io/opendatahub-operator/v2/api/components/v1alpha1"
+	configv1alpha1 "github.com/opendatahub-io/opendatahub-operator/v2/api/config/v1alpha1"
 	dscv2 "github.com/opendatahub-io/opendatahub-operator/v2/api/datasciencecluster/v2"
 	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/modules"
 	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/modules/aigateway"
@@ -16,7 +17,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func newPlatformCtx(mgmtState operatorv1.ManagementState) *modules.PlatformContext {
+func newDSCPlatformCtx(mgmtState operatorv1.ManagementState) *modules.PlatformContext {
 	return &modules.PlatformContext{
 		ApplicationsNamespace: "opendatahub",
 		DSC: &dscv2.DataScienceCluster{
@@ -25,6 +26,12 @@ func newPlatformCtx(mgmtState operatorv1.ManagementState) *modules.PlatformConte
 					AIGateway: componentApi.DSCAIGateway{
 						ManagementSpec: common.ManagementSpec{
 							ManagementState: mgmtState,
+						},
+						AIGatewayCommonSpec: componentApi.AIGatewayCommonSpec{
+							// Set ModelsAsService to same state so IsEnabled logic works
+							ModelsAsService: componentApi.DSCModelsAsServiceSpec{
+								ManagementState: mgmtState,
+							},
 						},
 					},
 				},
@@ -36,26 +43,47 @@ func newPlatformCtx(mgmtState operatorv1.ManagementState) *modules.PlatformConte
 func TestIsEnabled_Managed(t *testing.T) {
 	g := NewWithT(t)
 	h := aigateway.NewHandler()
-	g.Expect(h.IsEnabled(newPlatformCtx(operatorv1.Managed))).Should(BeTrue())
+	g.Expect(h.IsEnabled(newDSCPlatformCtx(operatorv1.Managed))).Should(BeTrue())
 }
 
 func TestIsEnabled_Removed(t *testing.T) {
 	g := NewWithT(t)
 	h := aigateway.NewHandler()
-	g.Expect(h.IsEnabled(newPlatformCtx(operatorv1.Removed))).Should(BeFalse())
+	g.Expect(h.IsEnabled(newDSCPlatformCtx(operatorv1.Removed))).Should(BeFalse())
 }
 
 func TestIsEnabled_Empty(t *testing.T) {
 	g := NewWithT(t)
 	h := aigateway.NewHandler()
-	g.Expect(h.IsEnabled(newPlatformCtx(""))).Should(BeFalse())
+	g.Expect(h.IsEnabled(newDSCPlatformCtx(""))).Should(BeFalse())
 }
 
-func TestIsEnabled_NilDSC(t *testing.T) {
+func TestIsEnabled_NilDSC_NilPlatform(t *testing.T) {
 	g := NewWithT(t)
 	h := aigateway.NewHandler()
 	ctx := &modules.PlatformContext{ApplicationsNamespace: "opendatahub"}
 	g.Expect(h.IsEnabled(ctx)).Should(BeFalse())
+}
+
+func newPlatformModePlatformCtx(mgmtState operatorv1.ManagementState) *modules.PlatformContext {
+	return &modules.PlatformContext{
+		ApplicationsNamespace: "opendatahub",
+		Platform: &configv1alpha1.Platform{
+			Spec: configv1alpha1.PlatformSpec{
+				Modules: configv1alpha1.PlatformModules{
+					AIGateway: common.ManagementSpec{
+						ManagementState: mgmtState,
+					},
+				},
+			},
+		},
+	}
+}
+
+func TestIsEnabled_PlatformMode_Managed(t *testing.T) {
+	g := NewWithT(t)
+	h := aigateway.NewHandler()
+	g.Expect(h.IsEnabled(newPlatformModePlatformCtx(operatorv1.Managed))).Should(BeTrue())
 }
 
 func TestIsEnabled_NilPlatformContext(t *testing.T) {
@@ -67,7 +95,7 @@ func TestIsEnabled_NilPlatformContext(t *testing.T) {
 func TestBuildModuleCR_BasicProjection(t *testing.T) {
 	g := NewWithT(t)
 	h := aigateway.NewHandler()
-	platform := newPlatformCtx(operatorv1.Managed)
+	platform := newDSCPlatformCtx(operatorv1.Managed)
 
 	u, err := h.BuildModuleCR(context.Background(), nil, platform)
 	g.Expect(err).ShouldNot(HaveOccurred())
@@ -87,13 +115,28 @@ func TestBuildModuleCR_NilPlatformContextReturnsError(t *testing.T) {
 	g.Expect(err).Should(HaveOccurred())
 }
 
-func TestBuildModuleCR_NilDSCReturnsError(t *testing.T) {
+func TestBuildModuleCR_NilDSCNilPlatformReturnsError(t *testing.T) {
 	g := NewWithT(t)
 	h := aigateway.NewHandler()
 	platform := &modules.PlatformContext{ApplicationsNamespace: "opendatahub"}
 
 	_, err := h.BuildModuleCR(context.Background(), nil, platform)
 	g.Expect(err).Should(HaveOccurred())
+}
+
+func TestBuildModuleCR_PlatformMode(t *testing.T) {
+	g := NewWithT(t)
+	h := aigateway.NewHandler()
+	platform := newPlatformModePlatformCtx(operatorv1.Managed)
+
+	u, err := h.BuildModuleCR(context.Background(), nil, platform)
+	g.Expect(err).ShouldNot(HaveOccurred())
+	g.Expect(u.GetName()).Should(Equal(componentApi.AIGatewayInstanceName))
+	g.Expect(u.GetKind()).Should(Equal(componentApi.AIGatewayKind))
+
+	spec, ok := u.Object["spec"].(map[string]any)
+	g.Expect(ok).Should(BeTrue(), "spec is not a map")
+	g.Expect(spec["managementState"]).Should(Equal("Managed"))
 }
 
 func TestGetName(t *testing.T) {
