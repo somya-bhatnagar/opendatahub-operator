@@ -95,10 +95,10 @@ func NewHandler() *handler {
 }
 
 func (h *handler) IsEnabled(platform *modules.PlatformContext) bool {
-	if platform == nil || platform.DSC == nil {
+	if platform == nil {
 		return false
 	}
-	// Openshift
+	// OpenShift
 	if platform.DSC != nil {
 		return platform.DSC.Spec.Components.AIGateway.ManagementState == operatorv1.Managed
 	}
