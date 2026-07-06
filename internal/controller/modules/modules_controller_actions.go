@@ -309,6 +309,13 @@ func provisionModules(ctx context.Context, rr *odhtype.ReconciliationRequest) er
 		return walkErr
 	}
 
+	if len(perModuleImages) > 0 || platformCtx.ApplicationsNamespace != "" {
+		rr.ModuleEnvInjection = &odhtype.ModuleEnvInjection{
+			PerModuleImages:       perModuleImages,
+			ApplicationsNamespace: platformCtx.ApplicationsNamespace,
+		}
+	}
+
 	if requeueAfter > 0 {
 		return odherrors.NewRequeueAfterError(requeueAfter)
 	}
@@ -324,13 +331,6 @@ func provisionModules(ctx context.Context, rr *odhtype.ReconciliationRequest) er
 		}
 
 		return fmt.Errorf("BuildModuleCR failed for modules: %s", strings.Join(failedModules, ", "))
-	}
-
-	if len(perModuleImages) > 0 || platformCtx.ApplicationsNamespace != "" {
-		rr.ModuleEnvInjection = &odhtype.ModuleEnvInjection{
-			PerModuleImages:       perModuleImages,
-			ApplicationsNamespace: platformCtx.ApplicationsNamespace,
-		}
 	}
 
 	return nil
