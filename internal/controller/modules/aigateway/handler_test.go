@@ -52,6 +52,52 @@ func TestIsEnabled_Empty(t *testing.T) {
 	g.Expect(h.IsEnabled(newDSCPlatformCtx(""))).Should(BeFalse())
 }
 
+// IsEnabled is driven solely by the top-level ManagementState — sub-component
+// states (batchGateway, modelsAsService) do not affect module enablement.
+func TestIsEnabled_ManagedWithSubComponentsRemoved(t *testing.T) {
+	g := NewWithT(t)
+	h := aigateway.NewHandler()
+	platform := &modules.PlatformContext{
+		ApplicationsNamespace: "opendatahub",
+		DSC: &dscv2.DataScienceCluster{
+			Spec: dscv2.DataScienceClusterSpec{
+				Components: dscv2.Components{
+					AIGateway: componentApi.DSCAIGateway{
+						ManagementSpec: common.ManagementSpec{ManagementState: operatorv1.Managed},
+						AIGatewayCommonSpec: componentApi.AIGatewayCommonSpec{
+							BatchGateway:    componentApi.AIGatewayBatchGatewaySpec{ManagementState: operatorv1.Removed},
+							ModelsAsService: componentApi.DSCModelsAsServiceSpec{ManagementState: operatorv1.Removed},
+						},
+					},
+				},
+			},
+		},
+	}
+	g.Expect(h.IsEnabled(platform)).Should(BeTrue())
+}
+
+func TestIsEnabled_RemovedWithSubComponentsManaged(t *testing.T) {
+	g := NewWithT(t)
+	h := aigateway.NewHandler()
+	platform := &modules.PlatformContext{
+		ApplicationsNamespace: "opendatahub",
+		DSC: &dscv2.DataScienceCluster{
+			Spec: dscv2.DataScienceClusterSpec{
+				Components: dscv2.Components{
+					AIGateway: componentApi.DSCAIGateway{
+						ManagementSpec: common.ManagementSpec{ManagementState: operatorv1.Removed},
+						AIGatewayCommonSpec: componentApi.AIGatewayCommonSpec{
+							BatchGateway:    componentApi.AIGatewayBatchGatewaySpec{ManagementState: operatorv1.Managed},
+							ModelsAsService: componentApi.DSCModelsAsServiceSpec{ManagementState: operatorv1.Managed},
+						},
+					},
+				},
+			},
+		},
+	}
+	g.Expect(h.IsEnabled(platform)).Should(BeFalse())
+}
+
 func TestIsEnabled_NilDSC_NilPlatform(t *testing.T) {
 	g := NewWithT(t)
 	h := aigateway.NewHandler()

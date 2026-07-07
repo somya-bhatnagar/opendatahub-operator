@@ -78,7 +78,10 @@ type KserveCommonSpec struct {
 	// Configures and enables NVIDIA NIM integration
 	// +kubebuilder:default={}
 	NIM NimSpec `json:"nim,omitempty"`
-	// Configures and enables Models as a Service integration
+	// Deprecated: ModelsAsService is preserved for v1→v2 webhook conversion compatibility only.
+	// In v2, this field is dead — MaaS is now configured via spec.components.aigateway.modelsAsService.
+	// Do not set this field on v2 DataScienceCluster objects; values here are silently ignored.
+	// This field will be removed once the v1 API is fully deprecated.
 	ModelsAsService DSCModelsAsServiceSpec `json:"modelsAsService,omitempty"`
 	// Configures and enables workload-variant-autoscaler (WVA) integration
 	WVA WVASpec `json:"wva,omitempty"`
