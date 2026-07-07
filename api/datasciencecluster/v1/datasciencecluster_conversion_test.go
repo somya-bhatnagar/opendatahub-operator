@@ -250,8 +250,8 @@ func TestConvertTo_MigratesMaaSFromKserveToAIGateway(t *testing.T) {
 	err := v1DSC.ConvertTo(v2DSC)
 	g.Expect(err).ToNot(HaveOccurred())
 
-	// Verify modelsAsService was migrated to aigateway.modelsasservice
-	g.Expect(v2DSC.Spec.Components.AIGateway.ModelsAsService.ManagementState).To(Equal(operatorv1.Managed))
+	// Verify modelsAsService was migrated to aigateway.modelsAsAService
+	g.Expect(v2DSC.Spec.Components.AIGateway.ModelsAsAService.ManagementState).To(Equal(operatorv1.Managed))
 
 	// Verify AIGateway was enabled
 	g.Expect(v2DSC.Spec.Components.AIGateway.ManagementState).To(Equal(operatorv1.Managed))
@@ -293,8 +293,8 @@ func TestConvertTo_MaaSNotEnabledInV1(t *testing.T) {
 	// AIGateway should be Removed when MaaS is not enabled
 	g.Expect(v2DSC.Spec.Components.AIGateway.ManagementState).To(Equal(operatorv1.Removed))
 
-	// modelsAsService should still be copied to aigateway
-	g.Expect(v2DSC.Spec.Components.AIGateway.ModelsAsService.ManagementState).To(Equal(operatorv1.Removed))
+	// modelsAsAService should still be copied to aigateway
+	g.Expect(v2DSC.Spec.Components.AIGateway.ModelsAsAService.ManagementState).To(Equal(operatorv1.Removed))
 }
 
 // TestConvertRoundTrip_BatchGatewayPreserved verifies that a v2→v1→v2 round-trip
@@ -316,7 +316,7 @@ func TestConvertRoundTrip_BatchGatewayPreserved(t *testing.T) {
 						BatchGateway: componentApi.AIGatewayBatchGatewaySpec{
 							ManagementState: operatorv1.Managed,
 						},
-						ModelsAsService: componentApi.DSCModelsAsServiceSpec{
+						ModelsAsAService: componentApi.DSCModelsAsServiceSpec{
 							ManagementState: operatorv1.Removed,
 						},
 					},
@@ -343,7 +343,7 @@ func TestConvertRoundTrip_BatchGatewayPreserved(t *testing.T) {
 	// BatchGateway must be preserved — not lost due to round-trip
 	g.Expect(v2Restored.Spec.Components.AIGateway.ManagementState).To(Equal(operatorv1.Managed))
 	g.Expect(v2Restored.Spec.Components.AIGateway.BatchGateway.ManagementState).To(Equal(operatorv1.Managed))
-	g.Expect(v2Restored.Spec.Components.AIGateway.ModelsAsService.ManagementState).To(Equal(operatorv1.Removed))
+	g.Expect(v2Restored.Spec.Components.AIGateway.ModelsAsAService.ManagementState).To(Equal(operatorv1.Removed))
 
 	// Internal annotation must be removed from the restored v2 object
 	g.Expect(v2Restored.GetAnnotations()).NotTo(HaveKey("conversion.opendatahub.io/aigateway-state"))

@@ -15,8 +15,8 @@ const (
 // AIGatewayCommonSpec defines the user-facing configuration for AIGateway,
 // shared between DSC and the AIGateway CR.
 type AIGatewayCommonSpec struct {
-	// ModelsAsService controls the Models as a Service sub-component.
-	ModelsAsService DSCModelsAsServiceSpec `json:"modelsAsService,omitempty"`
+	// ModelsAsAService controls the Models as a Service sub-component.
+	ModelsAsAService DSCModelsAsServiceSpec `json:"modelsAsAService,omitempty"`
 	// BatchGateway controls the batch-gateway operator sub-component.
 	BatchGateway AIGatewayBatchGatewaySpec `json:"batchGateway,omitempty"`
 }

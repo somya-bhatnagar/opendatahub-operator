@@ -154,8 +154,8 @@ func (c *DataScienceCluster) ConvertTo(dstRaw conversion.Hub) error {
 					}(),
 				},
 				AIGatewayCommonSpec: componentApi.AIGatewayCommonSpec{
-					// Auto-migrate: kserve.modelsAsService → aigateway.modelsasservice
-					ModelsAsService: c.Spec.Components.Kserve.ModelsAsService,
+					// Auto-migrate: kserve.modelsAsService → aigateway.modelsAsAService
+					ModelsAsAService: c.Spec.Components.Kserve.ModelsAsService,
 				},
 			},
 		},
@@ -256,10 +256,10 @@ func (c *DataScienceCluster) ConvertFrom(srcRaw conversion.Hub) error {
 		c.SetAnnotations(ann)
 	}
 
-	// When converting v2->v1, mirror aigateway.modelsAsService back into kserve.modelsAsService
+	// When converting v2->v1, mirror aigateway.modelsAsAService back into kserve.modelsAsService
 	// so v1 clients see the MaaS configuration in the familiar v1 field.
 	v1Kserve := src.Spec.Components.Kserve
-	v1Kserve.ModelsAsService = src.Spec.Components.AIGateway.ModelsAsService
+	v1Kserve.ModelsAsService = src.Spec.Components.AIGateway.ModelsAsAService
 
 	c.Spec = DataScienceClusterSpec{
 		Components: Components{
