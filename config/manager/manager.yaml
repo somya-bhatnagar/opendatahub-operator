@@ -90,6 +90,8 @@ spec:
             value: /opt/charts
           - name: ODH_PLATFORM_TYPE
             value: OpenDataHub
+          - name: RELATED_IMAGE_ODH_AI_GATEWAY_OPERATOR_IMAGE
+            value: quay.io/opendatahub/odh-ai-gateway-operator:f20f5afdd2825edc95bcd50b0f58ebba58ede78a
         args:
         - --leader-elect
         - --operator-name=opendatahub
