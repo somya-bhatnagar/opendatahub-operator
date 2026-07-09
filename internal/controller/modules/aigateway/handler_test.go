@@ -145,7 +145,7 @@ func TestIsEnabled_LegacyKserveModelsAsService_Managed(t *testing.T) {
 					// aigateway.managementState intentionally empty (not yet migrated)
 					Kserve: componentApi.DSCKserve{
 						KserveCommonSpec: componentApi.KserveCommonSpec{
-							ModelsAsService: componentApi.DSCModelsAsServiceSpec{ //nolint:staticcheck
+							ModelsAsService: componentApi.DSCModelsAsServiceSpec{
 								ManagementState: operatorv1.Managed,
 							},
 						},
@@ -172,7 +172,7 @@ func TestIsEnabled_LegacyKserveModelsAsService_ExplicitAIGatewayRemovedWins(t *t
 					},
 					Kserve: componentApi.DSCKserve{
 						KserveCommonSpec: componentApi.KserveCommonSpec{
-							ModelsAsService: componentApi.DSCModelsAsServiceSpec{ //nolint:staticcheck
+							ModelsAsService: componentApi.DSCModelsAsServiceSpec{
 								ManagementState: operatorv1.Managed,
 							},
 						},
@@ -196,7 +196,7 @@ func TestBuildModuleCR_LegacyKserveModelsAsService_PopulatesModelsAsAService(t *
 				Components: dscv2.Components{
 					Kserve: componentApi.DSCKserve{
 						KserveCommonSpec: componentApi.KserveCommonSpec{
-							ModelsAsService: componentApi.DSCModelsAsServiceSpec{ //nolint:staticcheck
+							ModelsAsService: componentApi.DSCModelsAsServiceSpec{
 								ManagementState: operatorv1.Managed,
 							},
 						},
@@ -238,7 +238,7 @@ func TestBuildModuleCR_ExplicitModelsAsAServiceWinsOverLegacy(t *testing.T) {
 					},
 					Kserve: componentApi.DSCKserve{
 						KserveCommonSpec: componentApi.KserveCommonSpec{
-							ModelsAsService: componentApi.DSCModelsAsServiceSpec{ //nolint:staticcheck
+							ModelsAsService: componentApi.DSCModelsAsServiceSpec{
 								ManagementState: operatorv1.Managed, // legacy
 							},
 						},
